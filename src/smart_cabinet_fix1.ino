@@ -1,6 +1,6 @@
 /**
  * @file    smart_cabinet.ino
- * @brief   Smart Cabinet v4.0 – ESP8266 + Blynk + HC-SR04 + PIR + Servo + DFPlayer
+ * @brief   Smart Cabinet v4.1 – ESP8266 + Blynk + HC-SR04 + PIR + Servo + DFPlayer
  *
  * Fixes applied vs v3.2:
  *  [F1] Loại bỏ delay() blocking trong rotateMg996() → dùng non-blocking state machine
@@ -9,6 +9,11 @@
  *  [F4] muteClose luôn set closeSoundPlayed = true để tránh phát liên tục
  *  [F5] warnPlaying reset đúng chỗ, tránh phát lặp WARN trong cùng lần tiếp cận
  *  [F6] audioPriority reset về 0 khi danger track kết thúc trước khi SHOW_B chạy
+ *
+ * Updates v4.1 (bổ sung từ bảng logic spec):
+ *  [U1] <10cm + PIR=false → VẪN đóng tủ (an toàn ưu tiên cao nhất)
+ *  [U2] <10cm + PIR=true  → Đóng tủ + phát TRACK_DANGER (không đổi)
+ *  [U3] 10-15cm / 15-20cm + PIR=false → Không làm gì (đã đúng từ v4.0)
  */
 
 /* ─── Blynk credentials ─────────────────────────────────────────────────── */
@@ -446,16 +451,32 @@ static void sensor_handle(void)
         zones_reset_all();                  /* [F3] clears waitingShowB  */
         g_warn_playing = false;
 
+        /*
+         * An toàn là ưu tiên cao nhất:
+         * Đóng tủ bất kể PIR có active hay không (vật thể lạ / lỗi PIR).
+         * Spec: "<10cm + PIR=false → Vẫn đóng tủ"
+         */
         if (!g_mg996_closed) {
-            Serial.println("[SENSOR] <10cm: AUTO LOCK");
-            if (wifi_connected()) {
-                Blynk.virtualWrite(VP_STATUS, "DONG TU BAO VE!");
-                Blynk.logEvent("intrusion_alert", "Tiep can nguy hiem!");
+            if (g_pir_active) {
+                Serial.println("[SENSOR] <10cm + PIR=true : AUTO LOCK (intrusion)");
+                if (wifi_connected()) {
+                    Blynk.virtualWrite(VP_STATUS, "DONG TU BAO VE!");
+                    Blynk.logEvent("intrusion_alert", "Tiep can nguy hiem!");
+                }
+            } else {
+                Serial.println("[SENSOR] <10cm + PIR=false: AUTO LOCK (safety)");
+                if (wifi_connected()) {
+                    Blynk.virtualWrite(VP_STATUS, "DONG TU AN TOAN");
+                }
             }
             mg996_start(MG996_CCW, true);
         }
 
-        /* [F4] Always mark played (even if muted) to suppress repeat */
+        /*
+         * Phát âm thanh TRACK_DANGER chỉ khi PIR=true (có người).
+         * Khi PIR=false → vật thể tĩnh / gõ nhẹ → không phát âm.
+         * [F4] Luôn set closeSoundPlayed kể cả khi mute để chặn vòng lặp.
+         */
         if (g_pir_active && !g_close_sound_played) {
             g_close_sound_played = true;
             if (!g_mute_close) {
