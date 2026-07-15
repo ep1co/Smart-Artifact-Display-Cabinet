@@ -246,7 +246,3 @@ This project provides hands-on practice in:
 * Connecting an embedded system to Blynk IoT.
 * Handling alerts and remote control.
 * Designing an embedded IoT system for a practical application.
-
-## 14. Author
-
-This project was developed for educational purposes as a prototype of a smart IoT-based artifact display cabinet.
