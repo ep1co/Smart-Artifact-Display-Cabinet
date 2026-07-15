@@ -1,4 +1,4 @@
-# Smart IoT Artifact Display Cabinet
+# Smart Artifact Display Cabinet
 
 ## 1. Introduction
 
